@@ -1,0 +1,18 @@
+requirements.txt
+  h_be2820f5d4d793 1-5
+.gitignore
+  h_be2820f5d4d793 1-3
+backend/indexer.py
+  h_be2820f5d4d793 7,9,12-24,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8e6e1b68a0eafb81d2db796acc428340d93d5a92",
+  "prompts": {},
+  "humans": {
+    "h_be2820f5d4d793": {
+      "author": "bharat5007 <bharatgoyal507@gmail.com>"
+    }
+  }
+}

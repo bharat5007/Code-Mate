@@ -10,7 +10,7 @@ INTERESTING_TYPES = [
 PY_LANGUAGE = Language(tspython.language())
 parser = Parser(PY_LANGUAGE)
 
-content = open("rough4.py", "r").read().encode("utf-8")
+content = open("rough2.py", "r").read().encode("utf-8")
 
 tree = parser.parse(content)
 root_node = tree.root_node
@@ -19,15 +19,39 @@ data = root_node.children
 chunks = []
 
 
-def prepare_metadata(x: Node):
-    meta_data = {
-        "type": x.type,
+def prepare_metadata(node: Node):
+    metadata = {
+        "type": node.type,
         "file": "rough2.py",
-        "start_line": x.start_point,
-        "end_line": x.end_point,
-        "source": x.text,
+        "start_line": node.start_point[0],
+        "end_line": node.end_point[0],
+        "source": node.text.decode("utf-8"),
     }
-    return meta_data
+
+    # Store name
+    name_node = node.child_by_field_name("name")
+    if name_node:
+        metadata["name"] = name_node.text.decode("utf-8")
+
+    # Store sub_function names
+    if node.type == "class_definition":
+        sub_functions = []
+        body_node = node.child_by_field_name("body")
+        for child in body_node.children:
+            name_node = child.child_by_field_name("name")
+            if name_node:
+                sub_functions.append(name_node.text.decode("utf-8"))
+
+        metadata["sub_functions"] = sub_functions
+
+    # Store substrings
+    body = node.child_by_field_name("body")
+    if body:
+        first = body.children[0]
+        if first.type == "expression_statement" and first.children[0].type == "string":
+            metadata["doc_string"] = first.text.decode("utf-8")
+
+    return metadata
 
 
 def prepare_chunks(data: Node):
@@ -35,10 +59,6 @@ def prepare_chunks(data: Node):
     metadata = None
     if data.type in INTERESTING_TYPES:
         metadata = prepare_metadata(data)
-
-    name_node = data.child_by_field_name("name")
-    if name_node:
-        metadata["name"] = name_node.text
 
     for child in data.children:
         if child.is_named:

@@ -5,3 +5,5 @@ tree_sitter_python
 tree_sitter
 pathspec
 rank-bm25
+faiss-cpu
+sentence-transformers

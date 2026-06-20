@@ -53,7 +53,6 @@ class Indexer:
         return metadata
 
     def prepare_chunks(self, data: Node, path: str):
-
         metadata = None
         if data.type in self.INTERESTING_TYPES:
             metadata = self.prepare_metadata(data, path)

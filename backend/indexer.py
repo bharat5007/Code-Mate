@@ -11,7 +11,9 @@ class Indexer:
             "import_from_statement",
         ]
         self.parser = Parser(Language(tspython.language()))
-        self.chunks = []
+        self.path_tree_mapping = {}
+        self.paths = None
+        self.chunks = {}
 
     def prepare_metadata(self, node: Node, path: str):
         metadata = {
@@ -61,14 +63,48 @@ class Indexer:
                 self.prepare_chunks(child, path)
 
         if metadata:
-            self.chunks.append(metadata)
+            if path not in self.chunks:
+                self.chunks[path] = []
+            self.chunks[path].append(metadata)
 
     def initialize_parsing(self, paths):
+        self.paths = paths
         for path in paths:
             content = open(path, "r").read().encode("utf-8")
             tree = self.parser.parse(content)
+            self.path_tree_mapping[path] = tree
             root_node = tree.root_node
 
             data = root_node.children
             for x in data:
                 self.prepare_chunks(x, str(path))
+
+    def update_chunks(self, path):
+        # For sake of simplicity will be update whole chunk of that file for now
+        self.chunks[path] = None
+        self.initialize_parsing([path])
+
+    def update_tree(self, paths):
+
+        # Files are removed
+        removed_paths = set(self.paths) - set(paths)
+        for path in removed_paths:
+            self.chunks.pop(path)
+
+        for path in paths:
+            content = open(path, "r").read().encode("utf-8")
+            tree = self.parser.parse(content)
+
+            # New fils is added
+            if self.path_tree_mapping.get(path) is None:
+                root_node = tree.root_node
+                data = root_node.children
+                for x in data:
+                    self.prepare_chunks(x, str(path))
+
+            # File is updated
+            elif tree.root_node.text != self.path_tree_mapping[path].root_node.text:
+                self.update_chunks(path)
+
+        # update current path list
+        self.paths = paths

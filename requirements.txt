@@ -10,3 +10,4 @@ sentence-transformers
 fastapi
 dotenv
 langgraph
+langchain_groq

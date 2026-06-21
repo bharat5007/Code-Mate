@@ -4,7 +4,7 @@ from tree_sitter import Language, Parser, Node
 
 
 class Indexer:
-    def __init__(self):
+    def __init__(self, paths):
         self.INTERESTING_TYPES = [
             "class_definition",
             "function_definition",
@@ -17,6 +17,7 @@ class Indexer:
         self.chunks = {}
         self.updated_chunks = []
         self.removed_chunks = []
+        self.initialize_parsing(paths)
 
     def prepare_metadata(self, node: Node, path: str):
         metadata = {

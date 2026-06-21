@@ -10,26 +10,38 @@ exclude_files = {"setup.py"}
 
 paths = []
 
-for file in Path(repo_path).rglob("*.py"):
-    if any(part in exclude_dirs for part in file.parts):
-        continue
 
-    if file.name in exclude_files:
-        continue
+def fetch_python_files_path():
+    for file in Path(repo_path).rglob("*.py"):
+        if any(part in exclude_dirs for part in file.parts):
+            continue
 
-    paths.append(file)
+        if file.name in exclude_files:
+            continue
 
-indexer = Indexer()
-indexer.initialize_parsing(paths)
-retriver = Retriver(indexer.updated_chunks, 384)
+        paths.append(file)
+
+
+def initialize_indexer_retriver():
+    # Global objects, will be stored in RAM
+    sessions = {}
+
+    indexer = Indexer(paths)
+    retriver = Retriver(indexer.updated_chunks)
+    sessions[repo_path] = {"indexer": retriver, "retriver": indexer}
 
 
 # after update
-indexer.update_tree(paths)
-if indexer.updated_chunks:
-    retriver.bm25_remove_chunks(paths)
-    retriver.bm25_add_chunks(indexer.updated_chunks)
-    retriver.faiss_add_chunks(indexer.updated_chunks, indexer.removed_chunks)
+def update_indexer_retriver():
+    session = session.get(repo_path)
+    indexer = session.get("indexer")
+    retriver = session.get("retriver")
+
+    indexer.update_tree(paths)
+    if indexer.updated_chunks:
+        retriver.bm25_remove_chunks(paths)
+        retriver.bm25_add_chunks(indexer.updated_chunks)
+        retriver.faiss_add_chunks(indexer.updated_chunks, indexer.removed_chunks)
 
 
 ############################## TO FOLLOW GITIGNORE ############################

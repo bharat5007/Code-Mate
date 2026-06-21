@@ -1,5 +1,7 @@
 from pathlib import Path
+
 from indexer import Indexer
+from retriver import Retriver
 
 repo_path = "/Users/bharat.goyal1/code_mate"
 
@@ -19,8 +21,15 @@ for file in Path(repo_path).rglob("*.py"):
 
 indexer = Indexer()
 indexer.initialize_parsing(paths)
-print(indexer.chunks)
-# print(paths)
+retriver = Retriver(indexer.updated_chunks, 384)
+
+
+# after update
+indexer.update_tree(paths)
+if indexer.updated_chunks:
+    retriver.bm25_remove_chunks(paths)
+    retriver.bm25_add_chunks(indexer.updated_chunks)
+    retriver.faiss_add_chunks(indexer.updated_chunks, indexer.removed_chunks)
 
 
 ############################## TO FOLLOW GITIGNORE ############################

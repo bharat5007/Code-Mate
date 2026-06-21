@@ -7,3 +7,6 @@ pathspec
 rank-bm25
 faiss-cpu
 sentence-transformers
+fastapi
+dotenv
+langgraph

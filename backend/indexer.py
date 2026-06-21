@@ -1,3 +1,4 @@
+import uuid
 import tree_sitter_python as tspython
 from tree_sitter import Language, Parser, Node
 
@@ -14,11 +15,14 @@ class Indexer:
         self.path_tree_mapping = {}
         self.paths = None
         self.chunks = {}
+        self.updated_chunks = []
+        self.removed_chunks = []
 
     def prepare_metadata(self, node: Node, path: str):
         metadata = {
-            "type": node.type,
+            "id": uuid.uuid4().int >> 64,
             "file": path,
+            "type": node.type,
             "start_line": node.start_point[0],
             "end_line": node.end_point[0],
             "source": node.text.decode("utf-8"),
@@ -52,21 +56,24 @@ class Indexer:
 
         return metadata
 
-    def prepare_chunks(self, data: Node, path: str):
+    def prepare_chunks(self, data: Node, path: str, is_updated: bool = True):
         metadata = None
         if data.type in self.INTERESTING_TYPES:
             metadata = self.prepare_metadata(data, path)
 
         for child in data.children:
             if child.is_named:
-                self.prepare_chunks(child, path)
+                self.prepare_chunks(child, path, is_updated)
 
         if metadata:
             if path not in self.chunks:
                 self.chunks[path] = []
             self.chunks[path].append(metadata)
 
-    def initialize_parsing(self, paths):
+            if is_updated:
+                self.updated_chunks.append(metadata)
+
+    def initialize_parsing(self, paths: list, is_updated: bool = True):
         self.paths = paths
         for path in paths:
             content = open(path, "r").read().encode("utf-8")
@@ -76,18 +83,20 @@ class Indexer:
 
             data = root_node.children
             for x in data:
-                self.prepare_chunks(x, str(path))
+                self.prepare_chunks(x, str(path), is_updated)
 
     def update_chunks(self, path):
         # For sake of simplicity will be update whole chunk of that file for now
-        self.chunks[path] = None
+        self.chunks.pop(path, None)
         self.initialize_parsing([path])
 
     def update_tree(self, paths):
-
+        self.updated_chunks = []
+        self.removed_chunks = []
         # Files are removed
         removed_paths = set(self.paths) - set(paths)
         for path in removed_paths:
+            self.removed_chunks.extend(self.chunks[path])
             self.chunks.pop(path)
 
         for path in paths:

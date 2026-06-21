@@ -3,12 +3,11 @@ from pydantic import BaseModel
 from indexer import Indexer
 from retriver import Retriver
 from pathlib import Path
+from constants import sessions
 
 # from manager import FunctionManager
 
 app = FastAPI()
-
-sessions = {}
 
 
 class QueryRequest(BaseModel):
@@ -22,19 +21,27 @@ class UpdateChunks(BaseModel):
     paths: list[str]
 
 
+class FetchChunks(BaseModel):
+    repo_path: str
+    query: str
+
+
 class Initialize(BaseModel):
     repo_path: str
     exclude_dirs: dict
     exclude_files: dict
 
 
-@app.post("/query")
-def query(request: QueryRequest):
-    session = sessions.get(request.repo_path)
+################## UTILS ############################
+def fetch_indexer_retriver(repo_path):
+    session = sessions.get(repo_path)
     if not session:
         return {"error": "repo not indexed yet"}
-    # results = FunctionManager.process_query(request.query)
-    return {"results": "results"}
+
+    indexer = session["indexer"]
+    retriver = session["retriver"]
+
+    return indexer, retriver
 
 
 @app.post("/initialize")
@@ -54,10 +61,14 @@ def initialize_indexer_retriver(request: Initialize):
 
     indexer = Indexer(paths)
     retriver = Retriver(indexer.updated_chunks)
-    sessions[request.repo_path] = {"indexer": retriver, "retriver": indexer}
+    sessions[request.repo_path] = {
+        "indexer": retriver,
+        "retriver": indexer,
+        "thread": "thread",
+    }
 
 
-@app.post("/update_chunks")
+@app.put("/chunks")
 def update_indexer_retriver(request: UpdateChunks):
     session = sessions.get(request.repo_path)
     if not session:
@@ -72,3 +83,20 @@ def update_indexer_retriver(request: UpdateChunks):
         retriver.bm25_add_chunks(indexer.updated_chunks)
         retriver.faiss_add_chunks(indexer.updated_chunks, indexer.removed_chunks)
     return {"status": "updated"}
+
+
+@app.get("/chunks")
+def fetch_chunks(request: FetchChunks):
+    _, retriver = fetch_indexer_retriver(request.repo_path)
+    response = retriver.retrive(request.query)
+    return response
+
+
+# @app.post("/query")
+# def query_llm(request: QueryRequest):
+#     session = sessions.get(request.repo_path)
+#     if not session:
+#         return {"error": "repo not indexed yet"}
+
+#     indexer = session["indexer"]
+#     retriver = session["retriver"]

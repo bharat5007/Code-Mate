@@ -31,19 +31,6 @@ def initialize_indexer_retriver():
     sessions[repo_path] = {"indexer": retriver, "retriver": indexer}
 
 
-# after update
-def update_indexer_retriver():
-    session = session.get(repo_path)
-    indexer = session.get("indexer")
-    retriver = session.get("retriver")
-
-    indexer.update_tree(paths)
-    if indexer.updated_chunks:
-        retriver.bm25_remove_chunks(paths)
-        retriver.bm25_add_chunks(indexer.updated_chunks)
-        retriver.faiss_add_chunks(indexer.updated_chunks, indexer.removed_chunks)
-
-
 ############################## TO FOLLOW GITIGNORE ############################
 # repo = Path(repo_path)
 # with open(repo / ".gitignore") as f:

@@ -21,7 +21,7 @@ class Indexer:
 
     def prepare_metadata(self, node: Node, path: str):
         metadata = {
-            "id": uuid.uuid4().int >> 64,
+            "id": uuid.uuid4().int % (2**63),
             "file": path,
             "type": node.type,
             "start_line": node.start_point[0],

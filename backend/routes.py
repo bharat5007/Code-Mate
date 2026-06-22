@@ -4,10 +4,15 @@ from indexer import Indexer
 from retriver import Retriver
 from pathlib import Path
 from constants import sessions
+from llm import chatbot
+import truststore
+
+truststore.inject_into_ssl()
 
 # from manager import FunctionManager
 
 app = FastAPI()
+CONFIG = {"configurable": {"thread_id": "thread"}}
 
 
 class QueryRequest(BaseModel):
@@ -28,8 +33,8 @@ class FetchChunks(BaseModel):
 
 class Initialize(BaseModel):
     repo_path: str
-    exclude_dirs: dict
-    exclude_files: dict
+    exclude_dirs: list[str] = []
+    exclude_files: list[str] = []
 
 
 ################## UTILS ############################
@@ -45,7 +50,7 @@ def fetch_indexer_retriver(repo_path):
 
 
 @app.post("/initialize")
-def initialize_indexer_retriver(request: Initialize):
+async def initialize_indexer_retriver(request: Initialize):
     paths = []
     for file in Path(request.repo_path).rglob("*.py"):
         if any(part in request.exclude_dirs for part in file.parts):
@@ -56,16 +61,15 @@ def initialize_indexer_retriver(request: Initialize):
 
         paths.append(file)
 
-    # Global objects, will be stored in RAM
-    sessions = {}
-
     indexer = Indexer(paths)
     retriver = Retriver(indexer.updated_chunks)
     sessions[request.repo_path] = {
-        "indexer": retriver,
-        "retriver": indexer,
+        "indexer": indexer,
+        "retriver": retriver,
         "thread": "thread",
     }
+
+    return {"Message": "Indexing completed"}
 
 
 @app.put("/chunks")
@@ -92,11 +96,16 @@ def fetch_chunks(request: FetchChunks):
     return response
 
 
-# @app.post("/query")
-# def query_llm(request: QueryRequest):
-#     session = sessions.get(request.repo_path)
-#     if not session:
-#         return {"error": "repo not indexed yet"}
+@app.post("/query")
+def query_llm(request: QueryRequest):
+    response = chatbot.invoke(
+        {"messages": [request.query], "repo_path": request.repo_path}, config=CONFIG
+    )
+    ai_message = response.get("messages", [])[-1]
+    if ai_message:
+        ai_message = ai_message.content
+    else:
+        "No response from bot"
 
-#     indexer = session["indexer"]
-#     retriver = session["retriver"]
+    print(f"!!!!!!!!!!!     {response}")
+    return {"results": ai_message}

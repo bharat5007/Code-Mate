@@ -1,0 +1,30 @@
+backend/routes.py
+  s_7d8b0dc9f46776::t_bc9eb94e5146cb 36-37
+  h_79f881d9d7bed1 7-10,15,53,67-68,72,101-102,104-108,110-111
+backend/indexer.py
+  s_7d8b0dc9f46776::t_fcdaa27952508e 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "104ae8c7a7cea504c60374a652ad85531b83a7d4",
+  "prompts": {},
+  "humans": {
+    "h_79f881d9d7bed1": {
+      "author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    },
+    "h_be2820f5d4d793": {
+      "author": "bharat5007 <bharatgoyal507@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7d8b0dc9f46776": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f93fa199-80ac-439e-bb71-c30074c18943",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    }
+  }
+}

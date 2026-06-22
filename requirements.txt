@@ -11,3 +11,4 @@ fastapi
 dotenv
 langgraph
 langchain_groq
+uvicorn

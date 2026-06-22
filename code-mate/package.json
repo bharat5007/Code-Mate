@@ -1,0 +1,63 @@
+{
+  "name": "code-mate",
+  "displayName": "code-mate",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.108.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "code-mate.editSelection",
+        "title": "Code Mate: Edit Selection"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "code-mate.editSelection",
+          "when": "editorHasSelection",
+          "group": "code-mate"
+        }
+      ]
+    },
+  "viewsContainers": {
+    "activitybar": [{
+      "id": "code-mate-sidebar",
+      "title": "Code Mate",
+      "icon": "icon.svg"
+    }]
+  },
+  "views": {
+    "code-mate-sidebar": [{
+      "type": "webview",
+      "id": "code-mate.chatView",
+      "name": "Chat"
+    }]
+  }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.108.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.56.1",
+    "eslint": "^9.39.3",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

@@ -1,3 +1,6 @@
 .venv
 rough*.py
 .env
+code-mate/node_modules/
+code-mate/out/
+backend/__pycache__

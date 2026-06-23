@@ -1,0 +1,28 @@
+README.md
+  s_7d8b0dc9f46776::t_493f4226bb4797 107-111
+  s_7d8b0dc9f46776::t_d81a3f720ff85d 36-39,42,46-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9f98d25322ca7858017948f71c1efd2a2bb70be4",
+  "prompts": {},
+  "humans": {
+    "h_79f881d9d7bed1": {
+      "author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    },
+    "h_be2820f5d4d793": {
+      "author": "bharat5007 <bharatgoyal507@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7d8b0dc9f46776": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f93fa199-80ac-439e-bb71-c30074c18943",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    }
+  }
+}

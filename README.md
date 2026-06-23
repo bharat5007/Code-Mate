@@ -35,7 +35,11 @@ FastAPI Backend (Python)
 
 ### LangGraph Pipeline
 
-![LangGraph Flow](assets/graph.png)
+![LangGraph Flow](screenshots/graph.png)
+
+### Edit Flow UI
+
+![Edit Code Success](screenshots/edit_code_success.png)
 
 ```
 START
@@ -94,7 +98,7 @@ code_mate/
 │   │   └── chatViewProvider.ts  # Webview UI: chat, sessions, accept/decline
 │   └── package.json
 │
-├── assets/
+├── screenshots/
 │   └── graph.png        # LangGraph flow diagram
 │
 └── requirements.txt

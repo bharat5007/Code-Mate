@@ -9,7 +9,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private sessions: string[];      // list of threadIds
   private activeSession: number;   // index into sessions
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(_context: vscode.ExtensionContext) {
     this.repoPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
     this.sessions = [crypto.randomUUID()];
     this.activeSession = 0;
@@ -28,8 +28,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.onDidReceiveMessage(async (msg) => {
       if (msg.type === "query") {
-        const response = await this.sendQuery(msg.text);
-        webviewView.webview.postMessage({ type: "response", text: response });
+        const data = await this.sendQuery(msg.text);
+        if (data.pending_edit) {
+          webviewView.webview.postMessage({ type: "pending_edit", edit: data.pending_edit });
+        } else {
+          webviewView.webview.postMessage({ type: "response", text: data.results ?? "No results found" });
+        }
+      }
+
+      if (msg.type === "approve_edit") {
+        const result = await this.approveEdit(msg.accepted);
+        webviewView.webview.postMessage({ type: "response", text: result });
       }
 
       if (msg.type === "switch_session") {
@@ -91,7 +100,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  async sendQuery(query: string): Promise<string> {
+  async sendQuery(query: string): Promise<{ results?: string; pending_edit?: { tool: string; tool_input: string } }> {
     try {
       const res = await fetch(`${API_BASE}/query`, {
         method: "POST",
@@ -103,8 +112,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           thread_id: this.threadId,
         }),
       });
-      const data = (await res.json()) as { results: string };
-      return data.results ?? "No results found";
+      return await res.json();
+    } catch {
+      return { results: "Error: Backend not reachable" };
+    }
+  }
+
+  private async approveEdit(accepted: boolean): Promise<string> {
+    try {
+      const res = await fetch(`${API_BASE}/approve_edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: this.threadId,
+          decision: accepted ? "approve" : "decline",
+        }),
+      });
+      const data = (await res.json()) as { results?: string };
+      return data.results ?? (accepted ? "Edit applied." : "Edit declined.");
     } catch {
       return "Error: Backend not reachable";
     }
@@ -134,6 +159,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   #input { flex: 1; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 4px; padding: 6px; resize: none; font-family: inherit; font-size: inherit; }
   #input:disabled, #send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   #send-btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+
+  .pending-edit { border: 1px solid var(--vscode-editorWidget-border, #454545); border-radius: 6px; overflow: hidden; align-self: stretch; max-width: 100%; }
+  .edit-meta { background: var(--vscode-editorGroupHeader-tabsBackground); padding: 6px 10px; font-size: 0.8em; display: flex; gap: 8px; align-items: center; }
+  .edit-tool { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-radius: 3px; padding: 1px 6px; font-family: monospace; }
+  .edit-file { color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .edit-code { margin: 0; padding: 8px 10px; font-family: var(--vscode-editor-font-family, monospace); font-size: 0.85em; background: var(--vscode-editor-background); overflow-x: auto; max-height: 200px; overflow-y: auto; white-space: pre; }
+  .edit-actions { display: flex; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--vscode-panel-border); }
+  .accept-btn { background: #2d7d46; color: #fff; border: none; border-radius: 4px; padding: 4px 14px; cursor: pointer; font-size: 0.85em; }
+  .accept-btn:hover { background: #3a9d59; }
+  .decline-btn { background: transparent; color: var(--vscode-errorForeground, #f48771); border: 1px solid var(--vscode-errorForeground, #f48771); border-radius: 4px; padding: 4px 14px; cursor: pointer; font-size: 0.85em; }
+  .decline-btn:hover { background: rgba(244,135,113,0.1); }
+  .accept-btn:disabled, .decline-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -214,6 +251,49 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     vscode.postMessage({ type: 'query', text });
   }
 
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function showPendingEdit(edit) {
+    // Remove the '...' placeholder
+    const bots = messages.querySelectorAll('.bot');
+    const last = bots[bots.length - 1];
+    if (last && last.textContent === '...') last.remove();
+
+    let toolInput = {};
+    try { toolInput = JSON.parse(edit.tool_input); } catch {}
+
+    const filePath = toolInput.file_path ?? '';
+    const code = toolInput.new_code ?? toolInput.new_content ?? '';
+    const lineInfo = edit.tool === 'edit_lines'
+      ? \` (lines \${toolInput.start_line}–\${toolInput.end_line})\`
+      : '';
+
+    const card = document.createElement('div');
+    card.className = 'pending-edit';
+    card.innerHTML =
+      '<div class="edit-meta">' +
+        '<span class="edit-tool">' + escHtml(edit.tool) + '</span>' +
+        '<span class="edit-file" title="' + escHtml(filePath) + '">' + escHtml(filePath.split('/').pop() + lineInfo) + '</span>' +
+      '</div>' +
+      '<pre class="edit-code">' + escHtml(code) + '</pre>' +
+      '<div class="edit-actions">' +
+        '<button class="accept-btn" onclick="approveEdit(true)">&#10003; Accept</button>' +
+        '<button class="decline-btn" onclick="approveEdit(false)">&#10007; Decline</button>' +
+      '</div>';
+    messages.appendChild(card);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function approveEdit(accepted) {
+    document.querySelectorAll('.accept-btn, .decline-btn').forEach(b => b.disabled = true);
+    addMsg(accepted ? 'Applying edit...' : 'Declining edit...', 'info');
+    input.disabled = true;
+    sendBtn.disabled = true;
+    vscode.postMessage({ type: 'approve_edit', accepted });
+  }
+
   window.addEventListener('message', e => {
     const d = e.data;
 
@@ -237,11 +317,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    if (d.type === 'pending_edit') {
+      showPendingEdit(d.edit);
+      return;
+    }
+
     if (d.type === 'response') {
       const bots = messages.querySelectorAll('.bot');
       const last = bots[bots.length - 1];
       if (last && last.textContent === '...') last.textContent = d.text;
       else addMsg(d.text, 'bot');
+      input.disabled = false;
+      sendBtn.disabled = false;
       return;
     }
   });

@@ -10,6 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from constants import sessions
 from tools import write_code, append_code, edit_lines, read_file, run_terminal
 from langchain_openai import ChatOpenAI
+from langgraph.types import interrupt
 
 
 load_dotenv()
@@ -108,7 +109,7 @@ def summarize_code_changes(state: ChatState):
     Tool input: {tool_input}
     Tool result: {tool_result_text}
     User's original request: {user_query}
-    
+
     RULES:
     - State WHAT changed and WHERE (file name + function/block name).
     - Do NOT suggest future improvements, tests, or enhancements.
@@ -123,6 +124,8 @@ def summarize_code_changes(state: ChatState):
 def code_change_summary_required(state: ChatState):
     if state["required_tool"] in ("edit_code", "append_code", "edit_lines"):
         return "summarize_code_changes"
+    if state["required_tool"] == "none":  # decline case
+        return "reset_state"
     return "call_llm"
 
 
@@ -207,6 +210,13 @@ def check_tools_required(state: ChatState):
 def call_tools(state: ChatState):
     tool_name = state["required_tool"]
     tool_input = state["tool_input"]
+    decision = interrupt({"tool": tool_name, "tool_input": tool_input})
+    if decision == "decline":
+        return {
+            "messages": [AIMessage(content="Edit declined by user.")],
+            "required_tool": "none",
+        }
+
     try:
         parsed = json.loads(tool_input)
         result = TOOLS[tool_name].invoke(parsed)

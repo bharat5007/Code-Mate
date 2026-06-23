@@ -7,10 +7,10 @@ from constants import sessions
 from llm import chatbot
 import truststore
 from typing import Optional
+from langgraph.types import Command
 
 truststore.inject_into_ssl()
 
-# from manager import FunctionManager
 
 app = FastAPI()
 CONFIG = {"configurable": {"thread_id": "thread"}}
@@ -37,6 +37,11 @@ class Initialize(BaseModel):
     repo_path: str
     exclude_dirs: list[str] = []
     exclude_files: list[str] = []
+
+
+class ApproveEdit(BaseModel):
+    thread_id: str
+    decision: str
 
 
 ################## UTILS ############################
@@ -119,6 +124,11 @@ def query_llm(request: QueryRequest):
     response = chatbot.invoke(
         {"messages": [request.query], "repo_path": request.repo_path}, config=config
     )
+
+    if response.get("__interrupt__"):
+        interrupt_data = response["__interrupt__"][0].value
+        return {"pending_edit": interrupt_data}
+
     ai_message = response.get("messages", [])[-1]
     if ai_message:
         ai_message = ai_message.content
@@ -129,3 +139,14 @@ def query_llm(request: QueryRequest):
     sessions[request.thread_id] = messages
     print(f"!!!!!!!!!!!     {response}")
     return {"results": ai_message}
+
+
+@app.post("/approve_edit")
+def approve_edit(request: ApproveEdit):
+    response = chatbot.invoke(
+        Command(resume=request.decision),
+        config={"configurable": {"thread_id": request.thread_id}},
+    )
+
+    ai_message = response.get("messages", [])[-1]
+    return {"results": ai_message.content if ai_message else "Edit applied."}

@@ -33,13 +33,19 @@ FastAPI Backend (Python)
         └── /update_chunks → Incremental re-index on file change
 ```
 
+### Chat Interface
+
+![Chat](scrrenshots/chat.png)
+
 ### LangGraph Pipeline
 
-![LangGraph Flow](screenshots/graph.png)
+![LangGraph Flow](scrrenshots/graph.png)
 
 ### Edit Flow UI
 
-![Edit Code Success](screenshots/edit_code_success.png)
+![Edit Code](scrrenshots/edit_code.png)
+
+![Edit Code Success](scrrenshots/edit_code_success.png)
 
 ```
 START
@@ -98,8 +104,11 @@ code_mate/
 │   │   └── chatViewProvider.ts  # Webview UI: chat, sessions, accept/decline
 │   └── package.json
 │
-├── screenshots/
-│   └── graph.png        # LangGraph flow diagram
+├── scrrenshots/
+│   ├── chat.png              # Sidebar chat UI
+│   ├── graph.png             # LangGraph flow diagram
+│   ├── edit_code.png         # Pending edit card with Accept/Decline
+│   └── edit_code_success.png # After accepting an edit
 │
 └── requirements.txt
 ```

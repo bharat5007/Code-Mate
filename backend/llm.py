@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from constants import sessions
-from tools import write_code, append_code, read_file, run_terminal
+from tools import write_code, append_code, edit_lines, read_file, run_terminal
 from langchain_openai import ChatOpenAI
 
 
@@ -20,6 +20,7 @@ MAX_TOKENS = 150
 TOOLS = {
     "edit_code": write_code,
     "append_code": append_code,
+    "edit_lines": edit_lines,
     "read_code": read_file,
     "run_terminal": run_terminal,
 }
@@ -30,15 +31,19 @@ class SimilarQueries(BaseModel):
     queries: List[str] = Field(description="3 similar queries")
 
 
+class SummarizeCodeChanges(BaseModel):
+    response: str = Field(description="Summary of recent code changes")
+
+
 class AnswerQuery(BaseModel):
     response: str = Field(description="Response for given query")
     confidence: int = Field(description="Higher confidence means need to use tool")
     summary: str = Field(description="New summary of chat")
     required_tool: Literal[
-        "edit_code", "append_code", "read_code", "run_terminal", "none"
+        "edit_code", "append_code", "edit_lines", "read_code", "run_terminal", "none"
     ] = Field(description="Which tool is required to run")
     tool_input: str = Field(
-        description="Input for required tool. For edit_code: JSON string with file_path and new_content keys. For append_code: JSON string with file_path and new_code keys. For read_code/run_terminal: the file path or command as a plain string."
+        description="Input for required tool. For edit_code: JSON string with file_path and new_content keys. For append_code: JSON string with file_path and new_code keys. For edit_lines: JSON string with file_path, start_line (int), end_line (int), new_code keys. For read_code/run_terminal: the file path or command as a plain string."
     )
 
 
@@ -47,6 +52,7 @@ class AnswerQuery(BaseModel):
 model = ChatOpenAI(model="gpt-5-nano-2025-08-07", temperature=0)
 query_model = model.with_structured_output(SimilarQueries)
 answer_query = model.with_structured_output(AnswerQuery)
+code_changes_summary = model.with_structured_output(SummarizeCodeChanges)
 
 
 ######################### GRAPH STATE #########################
@@ -82,6 +88,44 @@ def generate_similar_queries(state: ChatState):
     return {"chunks": chunks}
 
 
+def summarize_code_changes(state: ChatState):
+    tool = state["required_tool"]
+    tool_input = state.get("tool_input", "")
+    tool_result = state["messages"][-1]
+    tool_result_text = (
+        tool_result.content if hasattr(tool_result, "content") else str(tool_result)
+    )
+
+    user_query = ""
+    for m in state["messages"]:
+        if not isinstance(m, AIMessage) and hasattr(m, "content"):
+            user_query = m.content
+            break
+
+    prompt = f"""A code edit was just performed. Write a brief summary of what changed.
+
+    Tool used: {tool}
+    Tool input: {tool_input}
+    Tool result: {tool_result_text}
+    User's original request: {user_query}
+    
+    RULES:
+    - State WHAT changed and WHERE (file name + function/block name).
+    - Do NOT suggest future improvements, tests, or enhancements.
+    - Do NOT explain how the new code works in detail.
+    - Keep it under 3 sentences.
+    - Start with "Done."
+"""
+    result = code_changes_summary.invoke(prompt)
+    return {"messages": [AIMessage(content=result.response)]}
+
+
+def code_change_summary_required(state: ChatState):
+    if state["required_tool"] in ("edit_code", "append_code", "edit_lines"):
+        return "summarize_code_changes"
+    return "call_llm"
+
+
 def call_llm(state: ChatState):
     # messages
     last_messages = (
@@ -103,11 +147,15 @@ IMPORTANT RULES:
 WRITING CODE RULES (CRITICAL):
 - If the user wants to ADD a new function/class to an existing file: set required_tool to 'append_code'.
   tool_input must be a JSON string: {{"file_path": "<absolute path>", "new_code": "<only the new function/class code>"}}
-- If the user wants to REWRITE or REPLACE existing code in a file: set required_tool to 'edit_code'.
+- If the user wants to MODIFY a specific function or block (and you know the exact line range from the retrieved chunks): set required_tool to 'edit_lines'.
+  tool_input must be a JSON string: {{"file_path": "<absolute path>", "start_line": <int>, "end_line": <int>, "new_code": "<replacement code>"}}
+  Use start_line and end_line from the retrieved code chunks (they are 0-indexed).
+- If the user wants to REWRITE an entire file or you don't know the line range: set required_tool to 'edit_code'.
   tool_input must be a JSON string: {{"file_path": "<absolute path>", "new_content": "<complete new file content>"}}
+- PREFER 'edit_lines' over 'edit_code' whenever you know the exact line range — it is safer and more precise.
 - NEVER just describe the code in your response when asked to write/edit — you MUST use the tool.
 - If you don't know the exact file path, use 'read_code' first to confirm the path.
-- For write/append operations: set confidence to 9 and ALWAYS use the tool.
+- For write/append/edit_lines operations: set confidence to 9 and ALWAYS use the tool.
 
 CONTEXT:
 - Repository: {state.get("repo_path", "")}
@@ -141,7 +189,7 @@ def check_tools_required(state: ChatState):
 
     # Write operations always call the tool regardless of confidence
     if (
-        required_tool in ("edit_code", "append_code")
+        required_tool in ("edit_code", "append_code", "edit_lines")
         and state.get("tool_calls_count", 0) < 5
     ):
         return "call_tools"
@@ -185,6 +233,7 @@ graph.add_node("fetch_chunks", fetch_chunks)
 graph.add_node("generate_similar_queries", generate_similar_queries)
 graph.add_node("call_llm", call_llm)
 graph.add_node("call_tools", call_tools)
+graph.add_node("summarize_code_changes", summarize_code_changes)
 graph.add_node("reset_state", reset_state)
 
 # Add Edges
@@ -192,7 +241,8 @@ graph.add_edge(START, "fetch_chunks")
 graph.add_edge("fetch_chunks", "generate_similar_queries")
 graph.add_edge("generate_similar_queries", "call_llm")
 graph.add_conditional_edges("call_llm", check_tools_required)
-graph.add_edge("call_tools", "call_llm")
+graph.add_conditional_edges("call_tools", code_change_summary_required)
+graph.add_edge("summarize_code_changes", "reset_state")
 graph.add_edge("reset_state", END)
 
 chatbot = graph.compile(checkpointer=checkpointer)

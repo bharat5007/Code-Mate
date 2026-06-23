@@ -33,7 +33,6 @@ class FetchChunks(BaseModel):
     query: str
 
 
-
 class Initialize(BaseModel):
     repo_path: str
     exclude_dirs: list[str] = []
@@ -84,7 +83,7 @@ def fetch_messages(repo_path: str = Query(...), thread_id: str = Query(...)):
     return {"messages": messages}
 
 
-@app.put("/chunks")
+@app.post("/update_chunks")
 def update_indexer_retriver(request: UpdateChunks):
     session = sessions.get(request.repo_path)
     if not session:

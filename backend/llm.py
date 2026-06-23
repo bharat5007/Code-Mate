@@ -5,14 +5,11 @@ from langchain_core.messages import BaseMessage, AIMessage
 from langgraph.graph.message import add_messages
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from constants import sessions
 from tools import write_code, append_code, read_file, run_terminal
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
-import os
 
 
 load_dotenv()
@@ -20,7 +17,12 @@ truststore.inject_into_ssl()
 
 ######################### Constants #########################
 MAX_TOKENS = 150
-TOOLS = {"edit_code": write_code, "append_code": append_code, "read_code": read_file, "run_terminal": run_terminal}
+TOOLS = {
+    "edit_code": write_code,
+    "append_code": append_code,
+    "read_code": read_file,
+    "run_terminal": run_terminal,
+}
 
 
 ######################### Schemas #########################
@@ -32,15 +34,17 @@ class AnswerQuery(BaseModel):
     response: str = Field(description="Response for given query")
     confidence: int = Field(description="Higher confidence means need to use tool")
     summary: str = Field(description="New summary of chat")
-    required_tool: Literal["edit_code", "append_code", "read_code", "run_terminal", "none"] = Field(
-        description="Which tool is required to run"
+    required_tool: Literal[
+        "edit_code", "append_code", "read_code", "run_terminal", "none"
+    ] = Field(description="Which tool is required to run")
+    tool_input: str = Field(
+        description="Input for required tool. For edit_code: JSON string with file_path and new_content keys. For append_code: JSON string with file_path and new_code keys. For read_code/run_terminal: the file path or command as a plain string."
     )
-    tool_input: str = Field(description="Input for required tool. For edit_code: JSON string with file_path and new_content keys. For append_code: JSON string with file_path and new_code keys. For read_code/run_terminal: the file path or command as a plain string.")
 
 
 ######################### Models #########################
 # model = ChatGroq(model="deepseek-r1-distill-llama-70b", temperature=0)
-model = ChatOpenAI(model="gpt-5-nano-2025-08-07",temperature=0)
+model = ChatOpenAI(model="gpt-5-nano-2025-08-07", temperature=0)
 query_model = model.with_structured_output(SimilarQueries)
 answer_query = model.with_structured_output(AnswerQuery)
 
@@ -106,12 +110,12 @@ WRITING CODE RULES (CRITICAL):
 - For write/append operations: set confidence to 9 and ALWAYS use the tool.
 
 CONTEXT:
-- Repository: {state.get('repo_path', '')}
-- Chat summary so far: {summary or 'None'}
+- Repository: {state.get("repo_path", "")}
+- Chat summary so far: {summary or "None"}
 - Recent messages: {last_messages}
 - Retrieved code chunks: {chunks}
 
-USER QUERY: {query.content if hasattr(query, 'content') else query}
+USER QUERY: {query.content if hasattr(query, "content") else query}
 
 INSTRUCTIONS:
 1. Answer the query based on the code chunks and tool results above.
@@ -136,7 +140,10 @@ def check_tools_required(state: ChatState):
     required_tool = state["required_tool"]
 
     # Write operations always call the tool regardless of confidence
-    if required_tool in ("edit_code", "append_code") and state.get("tool_calls_count", 0) < 5:
+    if (
+        required_tool in ("edit_code", "append_code")
+        and state.get("tool_calls_count", 0) < 5
+    ):
         return "call_tools"
 
     if (

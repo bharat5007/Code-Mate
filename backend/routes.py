@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from indexer import Indexer
 from retriver import Retriver
@@ -6,6 +6,7 @@ from pathlib import Path
 from constants import sessions
 from llm import chatbot
 import truststore
+from typing import Optional
 
 truststore.inject_into_ssl()
 
@@ -17,6 +18,7 @@ CONFIG = {"configurable": {"thread_id": "thread"}}
 
 class QueryRequest(BaseModel):
     repo_path: str
+    thread_id: Optional[str] = None
     query: str
     n: int = 10
 
@@ -29,6 +31,7 @@ class UpdateChunks(BaseModel):
 class FetchChunks(BaseModel):
     repo_path: str
     query: str
+
 
 
 class Initialize(BaseModel):
@@ -51,6 +54,10 @@ def fetch_indexer_retriver(repo_path):
 
 @app.post("/initialize")
 async def initialize_indexer_retriver(request: Initialize):
+    print(f"<<<<<<<<<< {request.repo_path}")
+    if sessions.get(request.repo_path):
+        return {"Message": "Indexing completed", "Indexing_exist": True}
+
     paths = []
     for file in Path(request.repo_path).rglob("*.py"):
         if any(part in request.exclude_dirs for part in file.parts):
@@ -66,10 +73,15 @@ async def initialize_indexer_retriver(request: Initialize):
     sessions[request.repo_path] = {
         "indexer": indexer,
         "retriver": retriver,
-        "thread": "thread",
     }
 
-    return {"Message": "Indexing completed"}
+    return {"Message": "Indexing completed", "Indexing_exist": False}
+
+
+@app.get("/messages")
+def fetch_messages(repo_path: str = Query(...), thread_id: str = Query(...)):
+    messages = sessions.get(thread_id, [])
+    return {"messages": messages}
 
 
 @app.put("/chunks")
@@ -98,8 +110,15 @@ def fetch_chunks(request: FetchChunks):
 
 @app.post("/query")
 def query_llm(request: QueryRequest):
+    messages = sessions.get(request.thread_id, [])
+    messages.append(request.query)
+    config = (
+        {"configurable": {"thread_id": request.thread_id}}
+        if request.thread_id
+        else CONFIG
+    )
     response = chatbot.invoke(
-        {"messages": [request.query], "repo_path": request.repo_path}, config=CONFIG
+        {"messages": [request.query], "repo_path": request.repo_path}, config=config
     )
     ai_message = response.get("messages", [])[-1]
     if ai_message:
@@ -107,5 +126,7 @@ def query_llm(request: QueryRequest):
     else:
         "No response from bot"
 
+    messages.append(ai_message)
+    sessions[request.thread_id] = messages
     print(f"!!!!!!!!!!!     {response}")
     return {"results": ai_message}
